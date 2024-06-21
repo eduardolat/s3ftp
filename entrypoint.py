@@ -34,24 +34,21 @@ endpoint = {s3_endpoint}
         sys.exit(1)
 
 def add_sftp_user(user, password):
-    # Create the user's home directory and upload directory
-    home_dir = f"/home/{user}"
-    upload_dir = f"{home_dir}/upload"
-    os.makedirs(upload_dir, exist_ok=True)
+    user_dir = f"/home/{user}"
+    os.makedirs(user_dir, exist_ok=True)
 
     # Create the user
-    subprocess.run(['adduser', '-D', '-h', home_dir, '-s', '/sbin/nologin', user])
+    subprocess.run(['adduser', '-D', '-h', user_dir, '-s', '/sbin/nologin', user])
     subprocess.run(['sh', '-c', f'echo "{user}:{password}" | chpasswd'])
 
     # Set the correct permissions
-    subprocess.run(['chown', 'root:root', home_dir])
-    subprocess.run(['chmod', '755', home_dir])
-    subprocess.run(['chown', f'{user}:{user}', upload_dir])
+    subprocess.run(['chmod', '755', user_dir])
+    subprocess.run(['chown', f'{user}:{user}', user_dir])
 
     # Configure the user's SSH access
     with open('/etc/ssh/sshd_config', 'a') as sshd_config:
         sshd_config.write(f"Match User {user}\n")
-        sshd_config.write(f"  ChrootDirectory {home_dir}\n")
+        sshd_config.write(f"  ChrootDirectory {user_dir}\n")
         sshd_config.write("  ForceCommand internal-sftp\n")
         sshd_config.write("  AllowTcpForwarding no\n")
         sshd_config.write("  X11Forwarding no\n")
