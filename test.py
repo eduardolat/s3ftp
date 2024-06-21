@@ -24,12 +24,26 @@ def load_env():
 def build_image():
     subprocess.run(["docker", "build", "--tag", IMAGE_NAME, "."], check=True)
 
-def run_container(users):
+def run_container(env_vars):
+    SFTP_USERS = env_vars["SFTP_USERS"]
+    S3_ACCESS_KEY_ID = env_vars["S3_ACCESS_KEY_ID"]
+    S3_SECRET_ACCESS_KEY = env_vars["S3_SECRET_ACCESS_KEY"]
+    S3_REGION = env_vars["S3_REGION"]
+    S3_ENDPOINT = env_vars["S3_ENDPOINT"]
+    S3_BUCKET = env_vars["S3_BUCKET"]
+
     subprocess.run([
         "docker", "run",
         "--name", CONTAINER_NAME,
-        "-d", "-p", f"{PORT}:22", 
-        "-e", f"SFTP_USERS={users}",
+        "--cap-add", "SYS_ADMIN",
+        "--device", "/dev/fuse",
+        "-d", "-p", f"{PORT}:22",
+        "-e", f"SFTP_USERS={SFTP_USERS}",
+        "-e", f"S3_ACCESS_KEY_ID={S3_ACCESS_KEY_ID}",
+        "-e", f"S3_SECRET_ACCESS_KEY={S3_SECRET_ACCESS_KEY}",
+        "-e", f"S3_REGION={S3_REGION}",
+        "-e", f"S3_ENDPOINT={S3_ENDPOINT}",
+        "-e", f"S3_BUCKET={S3_BUCKET}",
         IMAGE_NAME,
     ], check=True)
 
@@ -64,15 +78,25 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 def main():
-    env_vars = load_env()
-    sftp_users = env_vars.get("SFTP_USERS")
-    if not sftp_users:
-        print("SFTP_USERS variable not set in .env file")
-        sys.exit(1)
+    loaded_env_vars = load_env()
+
+    env_vars = {
+        "SFTP_USERS": loaded_env_vars.get("SFTP_USERS"),
+        "S3_ACCESS_KEY_ID": loaded_env_vars.get("S3_ACCESS_KEY_ID"),
+        "S3_SECRET_ACCESS_KEY": loaded_env_vars.get("S3_SECRET_ACCESS_KEY"),
+        "S3_REGION": loaded_env_vars.get("S3_REGION"),
+        "S3_ENDPOINT": loaded_env_vars.get("S3_ENDPOINT"),
+        "S3_BUCKET": loaded_env_vars.get("S3_BUCKET")
+    }
+
+    for key, value in env_vars.items():
+        if not value:
+            print(f"{key} variable not set in .env file")
+            sys.exit(1)
 
     signal.signal(signal.SIGINT, signal_handler)
     build_image()
-    run_container(sftp_users)
+    run_container(env_vars)
     print("\n\nContainer is running. Press Ctrl+C to stop and remove the container and image.\n\n")
 
     logs_thread = threading.Thread(target=stream_logs)
