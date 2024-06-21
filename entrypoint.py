@@ -21,17 +21,14 @@ endpoint = {s3_endpoint}
     with open('/root/.config/rclone/rclone.conf', 'w') as f:
         f.write(rclone_config)
 
-    try:
-        subprocess.run([
-            'rclone', 'mount',
-            f's3:{s3_bucket}', '/home',
-            '--allow-non-empty', '--allow-other', '--daemon'
-        ], check=True, capture_output=True)
-    except subprocess.CalledProcessError as e:
-        print(f"error mounting S3: {e}")
-        print(f"stdout: {e.stdout.decode()}")
-        print(f"stderr: {e.stderr.decode()}")
-        sys.exit(1)
+def configure_rclone_cron(sync_cron):
+    # Run the sync script once to ensure the initial sync is done
+    subprocess.run(['/sync.py'], check=True)
+
+    # Add the sync script to the crontab
+    with open('/etc/crontabs/root', 'a') as f:
+        f.write(f"{sync_cron} /sync.py\n")
+    subprocess.run(['crond', '-b', '-l', '2'])
 
 def add_sftp_user(user, password):
     user_dir = f"/home/{user}"
@@ -68,13 +65,19 @@ def main():
         print("S3 environment variables are not set. Exiting.")
         sys.exit(1)
 
-    generate_ssh_host_keys()
-    configure_rclone(s3_access_key_id, s3_secret_access_key, s3_region, s3_endpoint, s3_bucket)
+    sync_cron = os.getenv('SYNC_CRON')
+    if not sync_cron:
+        print("SYNC_CRON is not set. Exiting.")
+        sys.exit(1)
 
+    generate_ssh_host_keys()
     users = sftp_users.split(',')
     for user_info in users:
         user, password = user_info.split(':')
         add_sftp_user(user, password)
+
+    configure_rclone(s3_access_key_id, s3_secret_access_key, s3_region, s3_endpoint, s3_bucket)
+    # configure_rclone_cron(sync_cron)
 
     subprocess.run(['/usr/sbin/sshd', '-D'])
 

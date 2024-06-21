@@ -4,8 +4,6 @@ import sys
 import threading
 
 PORT = "2222"
-USERS = "admin:pass,user:pass2"
-
 IMAGE_NAME = "eduardolat/s3ftp"
 CONTAINER_NAME = "s3ftp_test_container"
 
@@ -31,12 +29,11 @@ def run_container(env_vars):
     S3_REGION = env_vars["S3_REGION"]
     S3_ENDPOINT = env_vars["S3_ENDPOINT"]
     S3_BUCKET = env_vars["S3_BUCKET"]
+    SYNC_CRON = env_vars["SYNC_CRON"]
 
     subprocess.run([
         "docker", "run",
         "--name", CONTAINER_NAME,
-        "--cap-add", "SYS_ADMIN",
-        "--device", "/dev/fuse",
         "-d", "-p", f"{PORT}:22",
         "-e", f"SFTP_USERS={SFTP_USERS}",
         "-e", f"S3_ACCESS_KEY_ID={S3_ACCESS_KEY_ID}",
@@ -44,6 +41,7 @@ def run_container(env_vars):
         "-e", f"S3_REGION={S3_REGION}",
         "-e", f"S3_ENDPOINT={S3_ENDPOINT}",
         "-e", f"S3_BUCKET={S3_BUCKET}",
+        "-e", f"SYNC_CRON={SYNC_CRON}",
         IMAGE_NAME,
     ], check=True)
 
@@ -86,7 +84,8 @@ def main():
         "S3_SECRET_ACCESS_KEY": loaded_env_vars.get("S3_SECRET_ACCESS_KEY"),
         "S3_REGION": loaded_env_vars.get("S3_REGION"),
         "S3_ENDPOINT": loaded_env_vars.get("S3_ENDPOINT"),
-        "S3_BUCKET": loaded_env_vars.get("S3_BUCKET")
+        "S3_BUCKET": loaded_env_vars.get("S3_BUCKET"),
+        "SYNC_CRON": loaded_env_vars.get("SYNC_CRON")
     }
 
     for key, value in env_vars.items():
