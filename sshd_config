@@ -1,0 +1,22 @@
+# SSH Configuration file
+
+Port 22
+Protocol 2
+
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+
+PermitRootLogin no
+PasswordAuthentication yes
+PermitEmptyPasswords no
+PubkeyAuthentication no
+ChallengeResponseAuthentication no
+
+X11Forwarding no
+AllowTcpForwarding no
+Subsystem sftp internal-sftp
+
+MaxSessions 20
+MaxStartups 20:40:100
+MaxAuthTries 5
