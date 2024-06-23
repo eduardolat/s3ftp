@@ -1,0 +1,24 @@
+name: s3ftp
+
+services:
+  app:
+    container_name: s3ftp_app
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./:/app
+      - s3ftp_vol_app_go_mod_cache:/root/go/pkg/mod
+    ports:
+      - "2222:22"
+    networks:
+      - s3ftp_network
+    cap_add:
+      - SYS_ADMIN
+
+volumes:
+  s3ftp_vol_app_go_mod_cache:
+
+networks:
+  s3ftp_network:
+    driver: bridge

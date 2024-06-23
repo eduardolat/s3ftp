@@ -18,21 +18,21 @@ RUN wget https://github.com/go-task/task/releases/download/v3.34.1/task_linux_am
     mv ./task /usr/local/bin/task && \
     chmod 777 /usr/local/bin/task
 
+# Install GitHub CLI
+RUN wget https://github.com/cli/cli/releases/download/v2.46.0/gh_2.46.0_linux_amd64.tar.gz && \
+    tar -xzf gh_2.46.0_linux_amd64.tar.gz && \
+    mv gh_2.46.0_linux_amd64/bin/gh /usr/local/bin/gh && \
+    chmod 777 /usr/local/bin/gh
+
 # Delete the temporary directory and go to the app directory
 RUN rm -rf /app/temp
 WORKDIR /app
 
-# Copy and install go dependencies
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
+# Add the startup script on every bash session
+COPY scripts/startup.sh /usr/local/bin/startup.sh
+RUN echo "\n\n" >> /root/.bashrc && \
+    cat /usr/local/bin/startup.sh >> /root/.bashrc
 
-# Copy the rest of the files
-COPY . .
-
-# Build the app
-RUN task build
-
-# Expose the port 22 and run the app
+# Expose the port 22 and keep the container running
 EXPOSE 22
-CMD ["task", "serve"]
+CMD ["tail", "-f", "/dev/null"]
