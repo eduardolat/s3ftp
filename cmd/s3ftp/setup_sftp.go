@@ -22,7 +22,7 @@ func setupSFTP(env *config.Env) error {
 	users := strings.Split(*env.SFTP_USERS, ",")
 	for _, user := range users {
 		userSegments := strings.Split(user, ":")
-		if len(userSegments) != 2 {
+		if len(userSegments) != 2 && len(userSegments) != 3 {
 			return errors.New("invalid SFTP_USERS format")
 		}
 

@@ -64,42 +64,49 @@ func WriteInitialSSHConfig() error {
 // AddUser adds a user to the system, sets the necessary permissions, and adds the user
 // to the sshd_config file
 func AddUser(user, password string, isReadOnly bool) error {
-	userDir := "/home/" + user
-	uploadsDir := userDir + "/uploads"
+	chrootDir := fmt.Sprintf("/home/%s", user)
+	userDir := fmt.Sprintf("/home/%s/%s", user, user)
 
-	// Create the user
-	_, err := exec.Command("adduser", "-D", "-h", userDir, "-s", "/sbin/nologin", user).Output()
-	if err != nil {
-		return fmt.Errorf("error adding user: %w", err)
+	commands := []command{
+		{
+			name: "create chroot dir",
+			cmd:  fmt.Sprintf("mkdir -p %s", chrootDir),
+		},
+		{
+			name: "create user dir",
+			cmd:  fmt.Sprintf("mkdir -p %s", userDir),
+		},
+		{
+			name: "add user",
+			cmd:  fmt.Sprintf("adduser -D -h %s -s /sbin/nologin %s", chrootDir, user),
+		},
+		{
+			name: "set user password",
+			cmd:  fmt.Sprintf(`echo "%s:%s" | chpasswd`, user, password),
+		},
+		{
+			name: "set chroot dir ownership",
+			cmd:  fmt.Sprintf("chown root:root %s", chrootDir),
+		},
+		{
+			name: "set chroot dir permissions",
+			cmd:  fmt.Sprintf("chmod 755 %s", chrootDir),
+		},
+		{
+			name: "set user dir ownership",
+			cmd:  fmt.Sprintf("chown %s:%s %s", user, user, userDir),
+		},
+		{
+			name: "set user dir permissions",
+			cmd:  fmt.Sprintf("chmod 700 %s", userDir),
+		},
 	}
 
-	// Set the user's password
-	cmd := fmt.Sprintf(`echo "%s:%s" | chpasswd`, user, password)
-	_, err = exec.Command("sh", "-c", cmd).Output()
-	if err != nil {
-		return fmt.Errorf("error setting user password: %w", err)
-	}
-
-	// Set the correct permissions
-	_, err = exec.Command("chown", "root:root", userDir).Output()
-	if err != nil {
-		return fmt.Errorf("error setting user directory ownership: %w", err)
-	}
-	_, err = exec.Command("chmod", "755", userDir).Output()
-	if err != nil {
-		return fmt.Errorf("error setting user directory permissions: %w", err)
-	}
-	_, err = exec.Command("mkdir", uploadsDir).Output()
-	if err != nil {
-		return fmt.Errorf("error creating user uploads directory: %w", err)
-	}
-	_, err = exec.Command("chown", user+":"+user, uploadsDir).Output()
-	if err != nil {
-		return fmt.Errorf("error setting user uploads directory ownership: %w", err)
-	}
-	_, err = exec.Command("chmod", "755", uploadsDir).Output()
-	if err != nil {
-		return fmt.Errorf("error setting user uploads directory permissions: %w", err)
+	for _, cmd := range commands {
+		_, err := execNamedCMD(cmd)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Add the user to the sshd_config file
@@ -107,7 +114,7 @@ func AddUser(user, password string, isReadOnly bool) error {
 	if isReadOnly {
 		template = sshUserTemplateRO
 	}
-	sshdUserConfig := fmt.Sprintf(template, user, userDir)
+	sshdUserConfig := fmt.Sprintf(template, user, chrootDir)
 	f, err := os.OpenFile("/etc/ssh/sshd_config", os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("error opening sshd_config: %w", err)
@@ -118,7 +125,12 @@ func AddUser(user, password string, isReadOnly bool) error {
 		return fmt.Errorf("error writing to sshd_config: %w", err)
 	}
 
-	slog.Info("user added", "user", user)
+	if isReadOnly {
+		slog.Info(fmt.Sprintf("user %s added as ro user", user))
+	} else {
+		slog.Info(fmt.Sprintf("user %s added as rw user", user))
+	}
+
 	return nil
 }
 
