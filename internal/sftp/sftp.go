@@ -2,10 +2,13 @@ package sftp
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
+	"s3ftp/internal/config"
+	"strings"
 )
 
 //go:embed sshd_config
@@ -29,8 +32,11 @@ Match User %s
 	X11Forwarding no
 `
 
-// WriteInitialSSHConfig writes the initial sshd_config file to /etc/ssh/sshd_config
-func WriteInitialSSHConfig() error {
+// usersGroup is the group that all users belong to
+const usersGroup = "s3ftp-users"
+
+// writeInitialSSHConfig writes the initial sshd_config file to /etc/ssh/sshd_config
+func writeInitialSSHConfig() error {
 	sshdDir := "/etc/ssh"
 	sshdPath := "/etc/ssh/sshd_config"
 
@@ -61,9 +67,21 @@ func WriteInitialSSHConfig() error {
 	return nil
 }
 
-// AddUser adds a user to the system, sets the necessary permissions, and adds the user
+// createUsersGroup creates a group with the given name
+func createUsersGroup() error {
+	cmd := fmt.Sprintf("addgroup %s", usersGroup)
+	_, err := execNamedCMD(command{name: "create group", cmd: cmd})
+	if err != nil {
+		return err
+	}
+
+	slog.Info(fmt.Sprintf("group %s created", usersGroup))
+	return nil
+}
+
+// addUser adds a user to the system, sets the necessary permissions, and adds the user
 // to the sshd_config file
-func AddUser(user, password string, isReadOnly bool) error {
+func addUser(user, password string, isReadOnly bool) error {
 	chrootDir := fmt.Sprintf("/home/%s", user)
 	userDir := fmt.Sprintf("/home/%s/%s", user, user)
 
@@ -78,7 +96,9 @@ func AddUser(user, password string, isReadOnly bool) error {
 		},
 		{
 			name: "add user",
-			cmd:  fmt.Sprintf("adduser -D -h %s -s /sbin/nologin %s", chrootDir, user),
+			cmd: fmt.Sprintf(
+				"adduser -D -h %s -s /sbin/nologin -G %s %s", chrootDir, usersGroup, user,
+			),
 		},
 		{
 			name: "set user password",
@@ -94,7 +114,7 @@ func AddUser(user, password string, isReadOnly bool) error {
 		},
 		{
 			name: "set user dir ownership",
-			cmd:  fmt.Sprintf("chown %s:%s %s", user, user, userDir),
+			cmd:  fmt.Sprintf("chown %s:%s %s", user, usersGroup, userDir),
 		},
 		{
 			name: "set user dir permissions",
@@ -134,8 +154,8 @@ func AddUser(user, password string, isReadOnly bool) error {
 	return nil
 }
 
-// GenerateSSHKeys generates the necessary keys for the sftp server
-func GenerateSSHKeys() error {
+// generateSSHKeys generates the necessary keys for the sftp server
+func generateSSHKeys() error {
 	_, err := exec.Command("ssh-keygen", "-A").Output()
 	if err != nil {
 		return fmt.Errorf("error generating ssh keys: %w", err)
@@ -161,5 +181,101 @@ func StartSSHD() error {
 	}
 	slog.Info("sshd finished")
 
+	return nil
+}
+
+func SetupSFTP(env *config.Env) error {
+	err := generateSSHKeys()
+	if err != nil {
+		return fmt.Errorf("generate-ssh-keys: %w", err)
+	}
+
+	err = writeInitialSSHConfig()
+	if err != nil {
+		return fmt.Errorf("write-initial-ssh-config: %w", err)
+	}
+
+	err = createUsersGroup()
+	if err != nil {
+		return fmt.Errorf("create-users-group: %w", err)
+	}
+
+	users := strings.Split(*env.SFTP_USERS, ",")
+	for _, user := range users {
+		userSegments := strings.Split(user, ":")
+		if len(userSegments) != 2 && len(userSegments) != 3 {
+			return errors.New("invalid SFTP_USERS format")
+		}
+
+		username := userSegments[0]
+		password := userSegments[1]
+
+		readOnlyMode := false
+		if len(userSegments) > 2 {
+			readOnlyMode = userSegments[2] == "ro"
+		}
+
+		err = addUser(username, password, readOnlyMode)
+		if err != nil {
+			return fmt.Errorf("add-user(%s): %w", username, err)
+		}
+	}
+
+	err = saveExecuted()
+	if err != nil {
+		return fmt.Errorf("save-executed: %w", err)
+	}
+
+	return nil
+}
+
+func ResetSFTP() error {
+	b, err := isExecuted()
+	if err != nil {
+		return err
+	}
+	if !b {
+		return nil
+	}
+
+	users, err := getUsers()
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		if user.Group == usersGroup {
+			_, err := execNamedCMD(command{
+				name: "delete user",
+				cmd:  fmt.Sprintf("deluser %s", user.Username),
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	commands := []command{
+		{
+			name: "delete ssh keys",
+			cmd:  "rm -f /etc/ssh/ssh_host_*",
+		},
+		{
+			name: "delete users group",
+			cmd:  fmt.Sprintf("delgroup %s", usersGroup),
+		},
+		{
+			name: "delete sshd_config",
+			cmd:  "rm -f /etc/ssh/sshd_config",
+		},
+	}
+
+	for _, cmd := range commands {
+		_, err := execNamedCMD(cmd)
+		if err != nil {
+			return err
+		}
+	}
+
+	slog.Info("s3ftp reset executed")
 	return nil
 }
