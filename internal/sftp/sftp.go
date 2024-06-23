@@ -185,6 +185,38 @@ func StartSSHD() error {
 }
 
 func SetupSFTP(env *config.Env) error {
+	type us struct {
+		Username string
+		Passwd   string
+		ReadOnly bool
+	}
+
+	envUsers := strings.Split(*env.SFTP_USERS, ",")
+	users := make([]us, len(envUsers))
+	usernames := map[string]int{}
+	for i, user := range envUsers {
+		userSegments := strings.Split(user, ":")
+		if len(userSegments) != 2 && len(userSegments) != 3 {
+			return errors.New("invalid SFTP_USERS format")
+		}
+
+		isReadOnly := false
+		if len(userSegments) > 2 {
+			isReadOnly = userSegments[2] == "ro"
+		}
+
+		users[i] = us{
+			Username: userSegments[0],
+			Passwd:   userSegments[1],
+			ReadOnly: isReadOnly,
+		}
+
+		usernames[users[i].Username]++
+		if usernames[users[i].Username] > 1 {
+			return fmt.Errorf("duplicate username: %s", users[i].Username)
+		}
+	}
+
 	err := generateSSHKeys()
 	if err != nil {
 		return fmt.Errorf("generate-ssh-keys: %w", err)
@@ -200,57 +232,27 @@ func SetupSFTP(env *config.Env) error {
 		return fmt.Errorf("create-users-group: %w", err)
 	}
 
-	users := strings.Split(*env.SFTP_USERS, ",")
 	for _, user := range users {
-		userSegments := strings.Split(user, ":")
-		if len(userSegments) != 2 && len(userSegments) != 3 {
-			return errors.New("invalid SFTP_USERS format")
-		}
-
-		username := userSegments[0]
-		password := userSegments[1]
-
-		readOnlyMode := false
-		if len(userSegments) > 2 {
-			readOnlyMode = userSegments[2] == "ro"
-		}
-
-		err = addUser(username, password, readOnlyMode)
+		err = addUser(user.Username, user.Passwd, user.ReadOnly)
 		if err != nil {
-			return fmt.Errorf("add-user(%s): %w", username, err)
+			return fmt.Errorf("add-user(%s): %w", user.Username, err)
 		}
-	}
-
-	err = saveExecuted()
-	if err != nil {
-		return fmt.Errorf("save-executed: %w", err)
 	}
 
 	return nil
 }
 
 func ResetSFTP() error {
-	b, err := isExecuted()
-	if err != nil {
-		return err
-	}
-	if !b {
-		return nil
-	}
-
 	users, err := getUsers()
 	if err != nil {
 		return err
 	}
 	for _, user := range users {
 		if user.Group == usersGroup {
-			_, err := execNamedCMD(command{
+			_, _ = execNamedCMD(command{
 				name: "delete user",
 				cmd:  fmt.Sprintf("deluser %s", user.Username),
 			})
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -270,10 +272,7 @@ func ResetSFTP() error {
 	}
 
 	for _, cmd := range commands {
-		_, err := execNamedCMD(cmd)
-		if err != nil {
-			return err
-		}
+		_, _ = execNamedCMD(cmd)
 	}
 
 	slog.Info("s3ftp reset executed")
