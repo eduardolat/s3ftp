@@ -12,17 +12,17 @@ RUN apk update && apk add --no-cache \
     openssh=9.7_p1-r3 \
     rclone=1.66.0-r3
 
-# Install GitHub CLI
-RUN wget https://github.com/cli/cli/releases/download/v2.46.0/gh_2.46.0_linux_amd64.tar.gz && \
-    tar -xzf gh_2.46.0_linux_amd64.tar.gz && \
-    mv gh_2.46.0_linux_amd64/bin/gh /usr/local/bin/gh && \
-    chmod 777 /usr/local/bin/gh
-
 # Install task
 RUN wget https://github.com/go-task/task/releases/download/v3.34.1/task_linux_amd64.tar.gz && \
     tar -xzf task_linux_amd64.tar.gz && \
     mv ./task /usr/local/bin/task && \
     chmod 777 /usr/local/bin/task
+
+# Install GitHub CLI
+RUN wget https://github.com/cli/cli/releases/download/v2.46.0/gh_2.46.0_linux_amd64.tar.gz && \
+    tar -xzf gh_2.46.0_linux_amd64.tar.gz && \
+    mv gh_2.46.0_linux_amd64/bin/gh /usr/local/bin/gh && \
+    chmod 777 /usr/local/bin/gh
 
 # Delete the temporary directory and go to the app directory
 RUN rm -rf /app/temp
