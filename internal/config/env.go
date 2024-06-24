@@ -16,6 +16,7 @@ type Env struct {
 	S3_BUCKET            *string
 
 	SYNC_INTERVAL *string
+	SYNC_MODE     *string
 }
 
 // GetEnv returns the environment variables.
@@ -56,6 +57,10 @@ func GetEnv() *Env {
 
 		SYNC_INTERVAL: getEnvAsString(getEnvAsStringParams{
 			name:       "SYNC_INTERVAL",
+			isRequired: true,
+		}),
+		SYNC_MODE: getEnvAsString(getEnvAsStringParams{
+			name:       "SYNC_MODE",
 			isRequired: true,
 		}),
 	}

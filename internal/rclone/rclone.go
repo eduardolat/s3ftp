@@ -66,19 +66,36 @@ func runBisync(env *config.Env, shouldResync bool) error {
 	return nil
 }
 
-// RunBisyncLoop runs the rclone bidirectional sync command in a loop.
-func RunBisyncLoop(env *config.Env) error {
-	slog.Info("starting rclone bisync loop...")
+// runSync runs the rclone sync command.
+func runSync(env *config.Env, _ bool) error {
+	cmd := fmt.Sprintf("rclone sync s3:%s/ /home", *env.S3_BUCKET)
+
+	_, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return fmt.Errorf("error: %w", err)
+	}
+
+	return nil
+}
+
+// RunLoop runs the rclone sync or bisync loop.
+func RunLoop(env *config.Env) error {
+	slog.Info("starting rclone loop...")
 
 	dur, err := time.ParseDuration(*env.SYNC_INTERVAL)
 	if err != nil {
 		return err
 	}
 
+	fn := runSync
+	if *env.SYNC_MODE == "bisync" {
+		fn = runBisync
+	}
+
 	executions := 0
 	for {
 		shouldResync := executions == 0
-		if err := runBisync(env, shouldResync); err != nil {
+		if err := fn(env, shouldResync); err != nil {
 			return err
 		}
 
@@ -89,6 +106,7 @@ func RunBisyncLoop(env *config.Env) error {
 			"interval", *env.SYNC_INTERVAL,
 			"timestamp", time.Now().Format(time.RFC3339),
 			"next_execution", time.Now().Add(dur).Format(time.RFC3339),
+			"mode", *env.SYNC_MODE,
 			"resync", shouldResync,
 		)
 		time.Sleep(dur)

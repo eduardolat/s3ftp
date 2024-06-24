@@ -39,7 +39,7 @@ func main() {
 	})
 
 	eg.Go(func() error {
-		err := rclone.RunBisyncLoop(env)
+		err := rclone.RunLoop(env)
 		return fmt.Errorf("rclone error: %w", err)
 	})
 
