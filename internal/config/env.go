@@ -1,8 +1,6 @@
 package config
 
 import (
-	"log/slog"
-
 	"github.com/joho/godotenv"
 )
 
@@ -25,7 +23,7 @@ type Env struct {
 func GetEnv() *Env {
 	err := godotenv.Load()
 	if err == nil {
-		slog.Info("👉 using .env file")
+		logInfo("👉 using .env file")
 	}
 
 	env := &Env{
@@ -65,5 +63,6 @@ func GetEnv() *Env {
 		}),
 	}
 
+	validateEnv(env)
 	return env
 }

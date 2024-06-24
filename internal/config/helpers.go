@@ -2,15 +2,9 @@ package config
 
 import (
 	"errors"
-	"log/slog"
 	"os"
 	"strconv"
 )
-
-func fatalError(msg string, args ...any) {
-	slog.Error(msg, args...)
-	os.Exit(1)
-}
 
 type getEnvAsStringParams struct {
 	name         string
@@ -28,7 +22,7 @@ func getEnvAsString(params getEnvAsStringParams) *string {
 	value, err := getEnvAsStringFunc(params)
 
 	if err != nil {
-		fatalError(
+		logFatalError(
 			"error getting env variable",
 			"name", params.name,
 			"error", err,
@@ -71,7 +65,7 @@ func getEnvAsInt(params getEnvAsIntParams) *int {
 	value, err := getEnvAsIntFunc(params)
 
 	if err != nil {
-		fatalError(
+		logFatalError(
 			"error getting env variable",
 			"name", params.name,
 			"error", err,
@@ -120,7 +114,7 @@ func getEnvAsBool(params getEnvAsBoolParams) *bool {
 	value, err := getEnvAsBoolFunc(params)
 
 	if err != nil {
-		fatalError(
+		logFatalError(
 			"error getting env variable",
 			"name", params.name,
 			"error", err,
